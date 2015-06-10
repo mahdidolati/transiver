@@ -225,30 +225,12 @@ class RegFlows( object ):
     return self.fls
 
 def launch(topo = None, routing = None, mode = None):
-  """
-  Launch RipL-POX
-
-  topo is in format toponame,arg1,arg2,...
-  routing is a routing type (e.g., st, random, hashed)
-  mode is a controller mode (e.g., proactive, reactive, hybrid)
-  """
-  if not mode:
-    mode = DEF_MODE
-  # Instantiate a topo object from the passed-in file.
-  if not topo:
-    raise Exception("please specify topo and args on cmd line")
-  else:
-    t = buildTopo(topo, topos)
-    r = getRouting(routing, t)
-
-  core.registerNew(RipLController, t, r, mode)
+  
   regFlows = RegFlows([])
   core.register( 'regFlows', regFlows )
   flowDicto = FlowDicto({})
   core.register( 'flowDicto', flowDicto )
   
-  log.info("RipL-POX running with topo=%s." % topo)
-
   # core.registeredFlows = []
 
   from pox.lib.recoco import Timer
@@ -257,5 +239,5 @@ def launch(topo = None, routing = None, mode = None):
   core.openflow.addListenerByName("FlowStatsReceived", _handle_flowstats_received)
   core.openflow.addListenerByName("PortStatsReceived", _handle_portstats_received) 
 
-  # timer set to execute every five seconds
-  # Timer(15, _timer_func, recurring=True)
+  # timer set
+  Timer(15, _timer_func, recurring=True)
