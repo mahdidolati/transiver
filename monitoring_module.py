@@ -1,3 +1,9 @@
+import random
+from struct import pack
+from zlib import crc32
+# for flow_stats_to_list
+from pox.openflow.of_json import *
+
 from pox.core import core
 import pox.openflow.libopenflow_01 as of
 from pox.lib.util import dpid_to_str
@@ -88,6 +94,7 @@ def _timer_func ():
     break
   core.flowDicto.resetFlowDicto()
   log.info('<<<<<<<Sending congestion info...'+str(len(ddd)))'''
+  log.info("sending port stat reqs")
   for connection in core.openflow._connections.values():
     # connection.send(of.ofp_stats_request(body=of.ofp_flow_stats_request()))
     connection.send(of.ofp_stats_request(body=of.ofp_port_stats_request()))
@@ -178,7 +185,6 @@ def _handle_flowstats_received (event):
 
 # handler to display port statistics received in JSON format
 def _handle_portstats_received (event):
-  return
   
   stats = flow_stats_to_list(event.stats)
   device = dpidToStr(event.connection.dpid)
@@ -225,7 +231,8 @@ class RegFlows( object ):
     return self.fls
 
 def launch(topo = None, routing = None, mode = None):
-  
+  log.info("starting monitoring module")
+
   regFlows = RegFlows([])
   core.register( 'regFlows', regFlows )
   flowDicto = FlowDicto({})
