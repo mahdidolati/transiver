@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 import random
 from struct import pack
 from zlib import crc32
