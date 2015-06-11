@@ -13,10 +13,12 @@ from pox.lib.util import str_to_bool
 import time
 import threading
 from thread import *
-from httplib2 import Http
+# from httplib2 import Http
 from urllib import urlencode
 import sys
 import math
+# sending feedback to clients
+import socket
 
 log = core.getLogger()
 
@@ -51,14 +53,22 @@ class PortStat:
     return ret
 
 def sendR(ip, port, defPort, rate):
-  log.info("--------------------=-=-=-=-=-=--==sending congestion info to: " + str(port) + ':' + str(ip) + ':' + str(int(rate)) )
+  log.warning("--------------------=-=-=-=-=-=--==sending congestion info to: " + str(port) + ':' + str(ip) + ':' + str(int(rate)) )
+  s = socket.socket()
+  s.connect((ip,defPort))
+  try:
+    s.sendall(""+str(port)+","+str(rate))
+  except socket.error:
+    log.warning("send failed")
+  '''
   try:
     h = Http()
     mes = 'r'+str(port)+','+str(int(rate))
     url = "http://127.0.0.1:8089/regulate/"+mes+"/"+str(ip)
     h.request(url, "GET")
   except:
-    log.info('error in sending congestion info to hosts' + str(sys.exc_info()[0]))
+    log.warning('error in sending congestion info to hosts' + str(sys.exc_info()[0]))
+  '''
 
 statsDict = {}
 congestedDict = {}
@@ -83,10 +93,10 @@ class FlowDicto(object):
     self.flowDicto={}
 
 def _timer_func ():
-  '''defVal = 20
-  defPort = 5769
+  defVal = 20
+  defPort = 12345
   ddd = core.flowDicto.getFlowDicto()
-  log.info('>>>>>>>Sending congestion info...'+str(len(ddd)))
+  log.warning('>>>>>>>Sending congestion info...'+str(len(ddd)))
   for f in ddd:
     v = ddd[f]
     rIp = v[0]
@@ -95,8 +105,8 @@ def _timer_func ():
     start_new_thread(sendR ,(rIp, rPort, defPort, defVal,))
     break
   core.flowDicto.resetFlowDicto()
-  log.info('<<<<<<<Sending congestion info...'+str(len(ddd)))'''
-  log.info("sending port stat reqs")
+  log.warning('<<<<<<<Sending congestion info...'+str(len(ddd)))
+  log.warning("sending port stat reqs")
   for connection in core.openflow._connections.values():
     # connection.send(of.ofp_stats_request(body=of.ofp_flow_stats_request()))
     connection.send(of.ofp_stats_request(body=of.ofp_port_stats_request()))
@@ -107,7 +117,7 @@ def _timer_func ():
 def _handle_flowstats_received (event):
   return
 
-  log.info( "--------Congestion in device ") 
+  log.warning( "--------Congestion in device ") 
   device = dpidToStr(event.connection.dpid)
   
   stats = flow_stats_to_list(event.stats)
@@ -120,7 +130,7 @@ def _handle_flowstats_received (event):
   flowUsageRatio = {}
   totalKilo = 0.0
 
-  log.info( "+++++++++++Congestion in device ")
+  log.warning( "+++++++++++Congestion in device ")
   return
 
   for f in event.stats:
@@ -142,7 +152,7 @@ def _handle_flowstats_received (event):
               log.debug("these two are not equal: " + str(reg[0]) + str(f.match.nw_src) + str(reg[1]) + str(f.match.tp_src))
         else:
           log.debug( "Flow of type %s is responsible", f.match.dl_type )
-  log.info( ")))))))))))))))))))Congestion in device ")
+  log.warning( ")))))))))))))))))))Congestion in device ")
   for n in flowUsageRatio:
     ratio = flowUsageRatio[n][2]/totalKilo
     ratio = ratio/100.0
@@ -150,27 +160,27 @@ def _handle_flowstats_received (event):
     # over use over port 
     if flowUsageRatio[n][3] in congestedDict[device].ports:
       overUse = congestedDict[device].ports[flowUsageRatio[n][3]]
-      log.info( 'found flow for port : ' + str(flowUsageRatio[n][3]) + ' with over use: ' + str(overUse) )
+      log.warning( 'found flow for port : ' + str(flowUsageRatio[n][3]) + ' with over use: ' + str(overUse) )
     # if flow floods here pick up a port randomly
     if flowUsageRatio[n][3] == of.OFPP_FLOOD:
       for p in congestedDict[device].ports:
         overUse = congestedDict[device].ports[p]
         break
-      log.info( 'found flow for flood port : ' + str(of.OFPP_FLOOD) + ' with over use: ' + str(overUse) )
+      log.warning( 'found flow for flood port : ' + str(of.OFPP_FLOOD) + ' with over use: ' + str(overUse) )
     # add flow for later treatment
     if overUse != 0:
-      log.info( 'sending request for: ' +  str(overUse*ratio) )
+      log.warning( 'sending request for: ' +  str(overUse*ratio) )
       core.flowDicto.addFlow( n, (flowUsageRatio[n][0], flowUsageRatio[n][1], overUse*ratio) )
 
   del congestedDict[device]
-  log.info( "((((((()))))))Congestion in device ")
+  log.warning( "((((((()))))))Congestion in device ")
   return
-  #log.info("FlowStatsReceived from %s: %s",
+  #log.warning("FlowStatsReceived from %s: %s",
   #  dpidToStr(event.connection.dpid), stats)
 
   #for fl in event.stats:
   #  if fl.packet_count > 0:
-  #    log.info("\nflow during: %s sec, with byte: %s", 
+  #    log.warning("\nflow during: %s sec, with byte: %s", 
   #      fl.duration_sec, fl.packet_count)
 
   # Get number of bytes/packets in flows for web traffic only
@@ -182,7 +192,7 @@ def _handle_flowstats_received (event):
       web_bytes += f.byte_count
       web_packet += f.packet_count
       web_flows += 1
-  #log.info("Web traffic from %s: %s bytes (%s packets) over %s flows",
+  #log.warning("Web traffic from %s: %s bytes (%s packets) over %s flows",
   #  dpidToStr(event.connection.dpid), web_bytes, web_packet, web_flows)
 
 # handler to display port statistics received in JSON format
@@ -207,10 +217,10 @@ def _handle_portstats_received (event):
       if perRx != 0 or perTx != 0:
         log.debug( "period rx: %s and tx: %s", perRx, perTx )
       if perTx > 1000000:
-        log.info( "congestion in device %s with tx: %s", device, perTx )
+        log.warning( "congestion in device %s with tx: %s", device, perTx )
         log.debug( "congestion over switch %s and port %s detected!", device, portNo )
         congestion = True
-        log.info('there is usage over 90000 ' + str(perTx-90000) + ' over port: ' + str(portNo) )
+        log.warning('there is usage over 90000 ' + str(perTx-90000) + ' over port: ' + str(portNo) )
         if (device in congestedDict)==False:
           congestedDict[device] = DeviceStat({portNo:perTx-90000})
         else:
@@ -218,7 +228,7 @@ def _handle_portstats_received (event):
       else:
         log.debug( "every thing is goooood on switch %s and port %s!", dpidToStr(conn.dpid), portNo )  
 
-  # log.info('congcongcongocngocngoncogncongocngocnognc')
+  # log.warning('congcongcongocngocngoncogncongocngocnognc')
   if congestion == True:
     conn.send(of.ofp_stats_request(body=of.ofp_flow_stats_request()))
 
@@ -233,7 +243,7 @@ class RegFlows( object ):
     return self.fls
 
 def launch(topo = None, routing = None, mode = None):
-  log.info("starting monitoring module")
+  log.warning("starting monitoring module")
 
   regFlows = RegFlows([])
   core.register( 'regFlows', regFlows )

@@ -34,7 +34,7 @@ class runIperfClient(threading.Thread):
     self.quit = False
   def run(self):
     print "connecting to iperf server"
-    cmd = "iperf -c %s -p %s -u -b %sm -t 10" %(self.ip,self.port,self.bw)
+    cmd = "iperf -c %s -p %s -u -b %sm -t 10 -l 1500" %(self.ip,self.port,self.bw)
     print cmd
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
     (output, err) = p.communicate()
