@@ -115,8 +115,6 @@ def _timer_func ():
 # handler to display flow statistics received in JSON format
 # structure of event.stats is defined by ofp_flow_stats()
 def _handle_flowstats_received (event):
-  return
-
   log.warning( "--------Congestion in device ") 
   device = dpidToStr(event.connection.dpid)
   
@@ -131,7 +129,6 @@ def _handle_flowstats_received (event):
   totalKilo = 0.0
 
   log.warning( "+++++++++++Congestion in device ")
-  return
 
   for f in event.stats:
     for ac in f.actions:
@@ -151,7 +148,7 @@ def _handle_flowstats_received (event):
             else:
               log.debug("these two are not equal: " + str(reg[0]) + str(f.match.nw_src) + str(reg[1]) + str(f.match.tp_src))
         else:
-          log.debug( "Flow of type %s is responsible", f.match.dl_type )
+          log.warning( "Flow of type %s is responsible", f.match.dl_type )
   log.warning( ")))))))))))))))))))Congestion in device ")
   for n in flowUsageRatio:
     ratio = flowUsageRatio[n][2]/totalKilo
