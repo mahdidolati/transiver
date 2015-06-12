@@ -55,7 +55,7 @@ class PortStat:
 def sendR(ip, port, defPort, rate):
   log.warning("--------------------=-=-=-=-=-=--==sending congestion info to: " + str(port) + ':' + str(ip) + ':' + str(int(rate)) )
   s = socket.socket()
-  s.connect((ip,defPort))
+  s.connect((str(ip),defPort))
   try:
     s.sendall(""+str(port)+","+str(rate))
   except socket.error:
@@ -132,12 +132,20 @@ def _handle_flowstats_received (event):
 
   for f in event.stats:
     for ac in f.actions:
+      log.warning(">> flow's action port is" + str(ac.port))
+      log.warning(">> congested ports are" + str(congestedDict[device].ports))
       if ac.port in congestedDict[device].ports:
         # 0x0800 shows IP packet type
         if f.match.dl_type == 0x0800:
           # log.debug( "Flow %s %s is a potential responsible of the congestion!", f.match.nw_src, f.match.tp_src )
           log.debug("registered flows: " + str(core.regFlows.getFlows()))
           # search over registered flows that want their rate to be regulated
+          valKilo = f.byte_count/1000.0
+          totalKilo += valKilo
+          log.warning("found pppooorrt::::"+str(f.match.tp_src))
+          flowUsageRatio[str(f.match.nw_src)+str(f.match.tp_src)] = (f.match.nw_src, f.match.tp_src, valKilo, f.actions[0].port)
+          #ignore registration
+          ''' 
           for reg in core.regFlows.getFlows():
             log.debug( "%s %s", reg[0], reg[1] )
             # log.debug('%% number of bytes this flow send: ' + ' ' + str(f.actions[0].port))
@@ -147,6 +155,7 @@ def _handle_flowstats_received (event):
               flowUsageRatio[str(f.match.nw_src)+str(f.match.tp_src)] = (f.match.nw_src, f.match.tp_src, valKilo, f.actions[0].port)
             else:
               log.debug("these two are not equal: " + str(reg[0]) + str(f.match.nw_src) + str(reg[1]) + str(f.match.tp_src))
+          '''
         else:
           log.warning( "Flow of type %s is responsible", f.match.dl_type )
   log.warning( ")))))))))))))))))))Congestion in device ")

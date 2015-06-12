@@ -36,7 +36,7 @@ class runIperfClient(threading.Thread):
     print "connecting to iperf server"
     cmd = "iperf -c %s -p %s -u -b %sm -t 10 -l 1500" %(self.ip,self.port,self.bw)
     print cmd
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+    p = subprocess.Popen("sh ~/transiver/my_iperf.sh", stdout=subprocess.PIPE, shell=True)
     (output, err) = p.communicate()
     #print "/n--iperf out--/n",output
     o_list = output.split(']')
