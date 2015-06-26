@@ -10,40 +10,35 @@ set edgeIndex 0
 set serverIndex 0
 set ipIndex 0
 set ips {}
-for {set t 2} {$t < $allNum} {incr t} {
-   lappend ips "10.0.0.$t"
+for {set t 3} {$t < $allNum} {incr t} {
+   lappend ips "10.1.66.$t"
 }
-set cores-0 [$ns node]
-tb-set-node-os $cores-0 Ubuntu12-64-OVS
-tb-set-node-startcmd $cores-0 "sudo python ~/transiver/mk_ovs/mk_ovs.py"
+# set ctrl [$ns node]
+# tb-set-node-os $ctrl Ubuntu12-64-OVS
+set cores0 [$ns node]
+tb-set-node-os $cores0 Ubuntu12-64-OVS
+tb-set-node-startcmd $cores0 "sudo python ~/transiver/mk_ovs/mk_ovs.py -c"
+# $ns duplex-link $cores0 $ctrl 40Mb 10ms DropTail
 for {set i 0} {$i < $aggNum} {incr i} {
    set aggs($i) [$ns node]
    tb-set-node-os $aggs($i) Ubuntu12-64-OVS
-   $ns duplex-link $aggs($i) $cores-0 40Mb 15ms DropTail
-   tb-set-ip-interface $aggs($i) $cores-0 [lindex $ips $ipIndex]
-   incr ipIndex
-   tb-set-ip-interface $cores-0 $aggs($i) [lindex $ips $ipIndex]
-   incr ipIndex
-   tb-set-node-startcmd $aggs($i) "sudo python ~/transiver/mk_ovs/mk_ovs.py"
+   $ns duplex-link $aggs($i) $cores0 40Mb 15ms DropTail
+   # $ns duplex-link $aggs($i) $ctrl 40Mb 10ms DropTail
    for {set j 0} {$j < 2} {incr j} {
       set edges($edgeIndex) [$ns node]
       tb-set-node-os $edges($edgeIndex) Ubuntu12-64-OVS
+      tb-set-node-startcmd $edges($edgeIndex) "sudo python ~/transiver/mk_ovs/mk_ovs.py"
       $ns duplex-link $edges($edgeIndex) $aggs($i) 20Mb 15ms DropTail
-	  tb-set-ip-interface $edges($edgeIndex) $aggs($i) [lindex $ips $ipIndex]
-	  incr ipIndex
-	  tb-set-ip-interface $aggs($i) $edges($edgeIndex) [lindex $ips $ipIndex]
-	  incr ipIndex
+	  # $ns duplex-link $edges($edgeIndex) $ctrl 40Mb 10ms DropTail
 	  for {set k 0} {$k < 2} {incr k} {
 	     set servers($serverIndex) [$ns node]
          tb-set-node-os $servers($serverIndex) Ubuntu12-64-OVS
          $ns duplex-link $servers($serverIndex) $edges($edgeIndex) 10Mb 15ms DropTail
-		 tb-set-ip-interface $servers($serverIndex) $edges($edgeIndex) [lindex $ips $ipIndex]
-	     incr ipIndex
-		 tb-set-ip-interface $edges($edgeIndex) $servers($serverIndex) [lindex $ips $ipIndex]
-	     incr ipIndex
+		 # tb-set-ip-interface $servers($serverIndex) $edges($edgeIndex) [lindex $ips $ipIndex]
+		 tb-set-node-startcmd $servers($serverIndex) "sudo python ~/transiver/mk_ovs/mk_ovs.py -s [lindex $ips $ipIndex]"
+		 incr ipIndex
 		 incr serverIndex
 	  }
-	  tb-set-node-startcmd $edges($edgeIndex) "sudo python ~/transiver/mk_ovs/mk_ovs.py"
 	  incr edgeIndex
    }
 }
