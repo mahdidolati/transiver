@@ -34,9 +34,15 @@ for intf in eth_list:
     fr = open("ctrl_ip", "r")
     while True:
       ctrl_ip = fr.read()
-      if ctrl_ip != "":
+      print (str(ctrl_ip[2]), str(len(ctrl_ip)>3))
+      if len(ctrl_ip) > 3 and ctrl_ip[2] == '5':
+        print ("this is ip:", ctrl_ip)
         break
-      fr.seek(0,0)
+      else:
+        print ("no ip for remote yet...", ctrl_ip)
+      # fr.seek(0,0)
+      fr.close()
+      fr = open("ctrl_ip", "r")
     # end of while
     cmd = "sudo sh ~/transiver/mk_ovs/mk_ovs.sh %s %s %s" %(eth_num,eth_ip,ctrl_ip)
     print cmd
