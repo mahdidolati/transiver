@@ -9,4 +9,4 @@ addPort $1
 ovs-vsctl set-controller br0 tcp:127.0.0.1:6633
 ovs-vsctl set-fail-mode br0 secure
 
-ifconfig br0 $2 netmask 255.255.255.0
+# ifconfig br0 $2 netmask 255.255.255.0
