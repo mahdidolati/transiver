@@ -13,21 +13,26 @@ set ips {}
 for {set t 3} {$t < $allNum} {incr t} {
    lappend ips "10.1.66.$t"
 }
-# set ctrl [$ns node]
-# tb-set-node-os $ctrl Ubuntu12-64-OVS
+set lanNodes {}
+set ctrl [$ns node]
+tb-set-node-os $ctrl Ubuntu12-64-OVS
+lappend lanNodes $ctrl
 set cores0 [$ns node]
 tb-set-node-os $cores0 Ubuntu12-64-OVS
+lappend lanNodes $cores0
 tb-set-node-startcmd $cores0 "sudo python ~/transiver/mk_ovs/mk_ovs.py -c"
 # $ns duplex-link $cores0 $ctrl 40Mb 10ms DropTail
 for {set i 0} {$i < $aggNum} {incr i} {
    set aggs($i) [$ns node]
    tb-set-node-os $aggs($i) Ubuntu12-64-OVS
+   lappend lanNodes $aggs($i)
    $ns duplex-link $aggs($i) $cores0 40Mb 15ms DropTail
    # $ns duplex-link $aggs($i) $ctrl 40Mb 10ms DropTail
    for {set j 0} {$j < 2} {incr j} {
       set edges($edgeIndex) [$ns node]
       tb-set-node-os $edges($edgeIndex) Ubuntu12-64-OVS
-      tb-set-node-startcmd $edges($edgeIndex) "sudo python ~/transiver/mk_ovs/mk_ovs.py"
+	  lappend lanNodes $edges($edgeIndex)
+      tb-set-node-startcmd $edges($edgeIndex) "sudo python ~/transiver/mk_ovs/mk_ovs.py -w"
       $ns duplex-link $edges($edgeIndex) $aggs($i) 20Mb 15ms DropTail
 	  # $ns duplex-link $edges($edgeIndex) $ctrl 40Mb 10ms DropTail
 	  for {set k 0} {$k < 2} {incr k} {
@@ -42,6 +47,7 @@ for {set i 0} {$i < $aggNum} {incr i} {
 	  incr edgeIndex
    }
 }
+set lan0 [$ns make-lan $lanNodes 100000.0kb 0.0ms]
 
-$ns rtproto Manual
+$ns rtproto Static
 $ns run
