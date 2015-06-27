@@ -52,7 +52,7 @@ if s_mode == "-w":
  fr = open(CTRL_IP_PATH, "r")
  while True:
    ctrl_ip = fr.read()
-   if len(ctrl_net) < 5:
+   if len(ctrl_ip) < 5:
      fr.close()
      fr = open("ctrl_ip", "r")
      continue
