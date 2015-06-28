@@ -45,5 +45,23 @@ def get_other_ips(my_ip, all=8, base_ip=3, base_net="66"):
       l.append("10.1.%s.%s" %(base_net,i+base_ip))
   return l
 
+def kill_port_listener(port):
+  cmd = "sudo netstat -lnp | grep %s" %port
+  cond = True
+  while cond:
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+    (output, err) = p.communicate()
+    if len(output) > 4:
+      l1 = output.split("/")
+      if len(l1) > 0:
+        l2 = l1[0].split(" ")
+        pid = l2[len(l2)-1]
+        cmd = "sudo kill -9 %s" %pid
+        print ("in utility", cmd)
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+    else:
+      cond = False
+
 print get_ip_bw(4)
 print get_other_ips(5)
+kill_port_listener(8080)
