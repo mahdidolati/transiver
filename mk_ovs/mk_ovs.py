@@ -2,21 +2,7 @@ import subprocess
 import sys
 import logging
 import threading
-#
-PATH_TO_FILE = "/users/mdolati/transiver/mk_ovs/"
-LOG_FILE = "log.log"
-CTRL_IP_FILE = "ctrl_ip"
-LOG_PATH = PATH_TO_FILE + LOG_FILE
-CTRL_IP_PATH = PATH_TO_FILE + CTRL_IP_FILE
-#
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-handler = logging.FileHandler(LOG_PATH)
-handler.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
-#
+
 class runPox(threading.Thread):
   def run(self):
     cmd = "sudo netstat -lnp | grep 6633"
@@ -30,15 +16,35 @@ class runPox(threading.Thread):
         pid = l2[len(l2)-1]
         cmd = "sudo kill -9 %s" %pid
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+        p.communicate()
         logger.info("killed %s" %pid)
       #endIf,if
     cmd = "sudo sh ~/transiver/mk_ovs/run_pox.sh &"
-    p = subprocess.Popen(cmd, shell=True)
-    logger.info('ran pox')   
+    p = subprocess.check_output(cmd, shell=True)
+    logger.info('ran pox\n%s' %p)   
 # w for switch, s for server and c for controller
 s_mode = sys.argv[1]
+mm_ip = "ctrl"
 if "-s" == s_mode:
-  s_ip = sys.argv[2]
+  mm_ip = sys.argv[2]
+elif "-w" == s_mode:
+  mm_ip = sys.argv[2]
+s_ip = mm_ip
+w_ip = mm_ip
+#
+PATH_TO_FILE = "/users/mdolati/transiver/mk_ovs/"
+LOG_FILE = "log_%s.log" %mm_ip
+CTRL_IP_FILE = "ctrl_ip"
+LOG_PATH = PATH_TO_FILE + "logs/" + LOG_FILE
+CTRL_IP_PATH = PATH_TO_FILE + CTRL_IP_FILE
+#
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+handler = logging.FileHandler(LOG_PATH)
+handler.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 #
 logger.info("starting mk_ovs for a %s" %s_mode)
 #
@@ -67,6 +73,11 @@ for intf in eth_list:
   if len(intf) == 0:
     continue
   eth_num = intf[0]
+  try:
+    int(eth_num)
+  except ValueError:
+    print "no int for eth num"
+    continue
   if eth_num == "0":
     continue
   eth_ip = intf.split("inet addr:")[1].split("  Bcast")[0]
@@ -81,6 +92,9 @@ for intf in eth_list:
       isPoxRunning = True
       runPoxInst = runPox()
       runPoxInst.start()
+    cmd = "sudo route add -net 10.1.66.0 netmask 255.255.255.0 dev eth%s" %eth_num
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+    p.communicate()
     #endIf
   #endIF
   if s_mode == "-w":
@@ -90,12 +104,14 @@ for intf in eth_list:
       logger.info("same net as ctrl %s with eth%s" %(eth_net,eth_num))
       continue
     logger.info('remote ip is %s' %ctrl_ip)
-    cmd = "sudo sh ~/transiver/mk_ovs/mk_ovs.sh %s %s %s" %(eth_num,eth_ip,ctrl_ip)
+    cmd = "sudo sh ~/transiver/mk_ovs/mk_ovs.sh %s %s %s" %(eth_num,w_ip,ctrl_ip)
     logger.info(cmd)
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
-    logger.info('end of switch')
+    (output, err) = p.communicate()
+    logger.info('end of switch %s -- %s' %(output,err))
   if s_mode == "-s":
     cmd = "sudo ifconfig eth%s %s netmask 255.255.255.0" %(eth_num, s_ip)
-    subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+    p =subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+    p.communicate()
 
 

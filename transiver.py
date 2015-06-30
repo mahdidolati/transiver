@@ -31,7 +31,7 @@ class runIperfClient(threading.Thread):
     self.ip = ip
     self.port = port
     self.bw = bw
-    self.t = 10
+    self.t = 20
     self.sock_server = sock_server
     self.my_port = 0
     self.quit = False
@@ -39,7 +39,8 @@ class runIperfClient(threading.Thread):
   def run(self):
     while self.quit == False:
       print "connecting to iperf server"
-      cmd = "sudo iperf -c %s -p %s -u -b %sm -t 15 -l 1500" %(self.ip,self.port,self.bw)
+      params = (self.ip,self.port,self.bw,self.t)
+      cmd = "sudo iperf -c %s -p %s -u -b %sm -t %s" %params
       print cmd
       cmd = "sudo sh /users/mdolati/transiver/my_iperf.sh %s %s %s" %(self.ip,self.bw, self.t)
       p = subprocess.check_output(cmd, shell=True)
@@ -94,7 +95,7 @@ class sockServer(threading.Thread):
     print "spawn clients"
     '''ips = get_other_ips(self.get_right_most_ip_digit())
     bws = get_ip_bw(self.get_right_most_ip_digit())'''
-    ips = ["10.1.66.3"]
+    ips = ["10.1.66.9"]
     bws = [9.0]
     counter = 0
     for iperf_ip in ips:
