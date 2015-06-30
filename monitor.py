@@ -94,7 +94,7 @@ class FlowDicto(object):
 
 def _timer_func ():
   defVal = 20
-  defPort = 12345
+  defPort = 8080 
   ddd = core.flowDicto.getFlowDicto()
   log.warning('>>>>>>>Sending congestion info...'+str(len(ddd)))
   for f in ddd:
@@ -115,6 +115,9 @@ def _timer_func ():
 # handler to display flow statistics received in JSON format
 # structure of event.stats is defined by ofp_flow_stats()
 def _handle_flowstats_received (event):
+  # unit is Mb and statistics give Byte, so need division
+  BW_UNIT = 8000000
+
   log.warning( "--------Congestion in device ") 
   device = dpidToStr(event.connection.dpid)
   
@@ -140,7 +143,7 @@ def _handle_flowstats_received (event):
           # log.debug( "Flow %s %s is a potential responsible of the congestion!", f.match.nw_src, f.match.tp_src )
           log.debug("registered flows: " + str(core.regFlows.getFlows()))
           # search over registered flows that want their rate to be regulated
-          valKilo = f.byte_count/1000.0
+          valKilo = f.byte_count/BW_UNIT
           totalKilo += valKilo
           log.warning("found pppooorrt::::"+str(f.match.tp_src))
           flowUsageRatio[str(f.match.nw_src)+str(f.match.tp_src)] = (f.match.nw_src, f.match.tp_src, valKilo, f.actions[0].port)
@@ -158,10 +161,10 @@ def _handle_flowstats_received (event):
           '''
         else:
           log.warning( "Flow of type %s is responsible", f.match.dl_type )
-  log.warning( ")))))))))))))))))))Congestion in device ")
+
   for n in flowUsageRatio:
     ratio = flowUsageRatio[n][2]/totalKilo
-    ratio = ratio/100.0
+    log.warning("ratio is: %s" %ratio)
     overUse = 0
     # over use over port 
     if flowUsageRatio[n][3] in congestedDict[device].ports:
@@ -179,7 +182,6 @@ def _handle_flowstats_received (event):
       core.flowDicto.addFlow( n, (flowUsageRatio[n][0], flowUsageRatio[n][1], overUse*ratio) )
 
   del congestedDict[device]
-  log.warning( "((((((()))))))Congestion in device ")
   return
   #log.warning("FlowStatsReceived from %s: %s",
   #  dpidToStr(event.connection.dpid), stats)
@@ -203,7 +205,11 @@ def _handle_flowstats_received (event):
 
 # handler to display port statistics received in JSON format
 def _handle_portstats_received (event):
-  
+  # unit is byte and max is 10MB
+  BW_UNIT = 1000000.0
+  MAX_ALLOWED_BW = 9.5
+  MONIT_PERIOD = 15.0
+
   stats = flow_stats_to_list(event.stats)
   device = dpidToStr(event.connection.dpid)
   conn = event.connection
@@ -216,25 +222,28 @@ def _handle_portstats_received (event):
   for pStat in stats:
     portNo = pStat['port_no']
     if (portNo in statsDict[device].ports) == False:
-      statsDict[device].ports[portNo] = PortStat(pStat['rx_bytes'], pStat['tx_bytes'])
+      statsDict[device].ports[portNo] = PortStat(pStat['rx_bytes']*8, pStat['tx_bytes']*8)
     else:
-      perRx = statsDict[device].ports[portNo].periodRx(pStat['rx_bytes'])
-      perTx = statsDict[device].ports[portNo].periodTx(pStat['tx_bytes'])
+      perRx = statsDict[device].ports[portNo].periodRx(pStat['rx_bytes']*8)
+      perTx = statsDict[device].ports[portNo].periodTx(pStat['tx_bytes']*8)
       if perRx != 0 or perTx != 0:
         log.debug( "period rx: %s and tx: %s", perRx, perTx )
-      if perTx > 1000000:
+      tx_rate = (perTx/BW_UNIT)/MONIT_PERIOD
+      log.warning("tx period is: %s" %perTx)
+      log.warning("estimated tx rate is: %s MB/s" %tx_rate)
+      if tx_rate> MAX_ALLOWED_BW:
         log.warning( "congestion in device %s with tx: %s", device, perTx )
         log.debug( "congestion over switch %s and port %s detected!", device, portNo )
         congestion = True
         log.warning('there is usage over 90000 ' + str(perTx-90000) + ' over port: ' + str(portNo) )
+        over_use = tx_rate - MAX_ALLOWED_BW 
         if (device in congestedDict)==False:
-          congestedDict[device] = DeviceStat({portNo:perTx-90000})
+          congestedDict[device] = DeviceStat({portNo:over_use})
         else:
-          congestedDict[device].addPort(portNo, perTx-90000)
+          congestedDict[device].addPort(portNo, over_use)
       else:
         log.debug( "every thing is goooood on switch %s and port %s!", dpidToStr(conn.dpid), portNo )  
 
-  # log.warning('congcongcongocngocngoncogncongocngocnognc')
   if congestion == True:
     conn.send(of.ofp_stats_request(body=of.ofp_flow_stats_request()))
 
