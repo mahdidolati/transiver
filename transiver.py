@@ -8,6 +8,7 @@ import threading
 import subprocess
 from utility.utility import *
 import logging
+import time
 
 class runIperfServer(threading.Thread):
   def __init__(self, threadID, name, port):
@@ -23,6 +24,32 @@ class runIperfServer(threading.Thread):
     p = subprocess.Popen(cmd, shell=True)
     # (output, err) = p.communicate()
     # print "iperf out", output
+
+class runPing(threading.Thread):
+  def __init__(self, threadID, name, ip, logger):
+    threading.Thread.__init__(self)
+    self.threadID = threadID
+    self.ip = ip
+    self.logger = logger
+    self.quit = False
+  def run(self):
+    while self.quit == False:
+      cmd = "ping %s -c 20" %self.ip
+      print cmd
+      p = subprocess.check_output(cmd, shell=True)
+      p = p.split("time=")
+      flag = True
+      ping_avg = 0
+      for tt in p:
+        if flag:
+          flag = False
+          continue
+        ping_res = tt.split(" ms")
+        if len(ping_res) > 0:
+          p_time = float(ping_res[0].split(" ms")[0])
+          ping_avg += p_time
+      print ping_avg/20
+      logger.info("delay,%s,%s" %(time.time()*1000, ping_avg))
 
 class runIperfClient(threading.Thread):
   def __init__(self, threadID, name, ip, port, sock_server, bw, logger):
@@ -49,8 +76,12 @@ class runIperfClient(threading.Thread):
       p = str(p)
       loss_perc = p.split("%")[0].split("(")
       loss_perc = loss_perc[len(loss_perc)-1]
-      logger.info("%s,%s" %("time",loss_perc))
       #print "/n--iperf out--/n",output
+      bw_srv = p.split("Server Report:")
+      bw_srv = bw_srv[len(bw_srv)-1].split(" Mbits/sec")[0].split(" ")
+      bw_srv = float(bw_srv[len(bw_srv)-1])
+      logger.info("loss,%s,%s,%s" %(time.time(),bw_srv,loss_perc))
+      #
       o_list = p.split(']')
       o_list = o_list[1].split(' ')
       for i in range(len(o_list)):
@@ -93,16 +124,18 @@ class sockServer(threading.Thread):
     s.listen(10)
     self.clients = []
     print "spawn clients"
-    '''ips = get_other_ips(self.get_right_most_ip_digit())
-    bws = get_ip_bw(self.get_right_most_ip_digit())'''
-    ips = ["10.1.66.9"]
-    bws = [9.0]
+    ips = get_other_ips(self.get_right_most_ip_digit())
+    bws = get_ip_bw(self.get_right_most_ip_digit())
+    # ips = ["10.1.66.5"]
+    # bws = [9.0]
     counter = 0
     for iperf_ip in ips:
       thread1 = runIperfClient(1, "Thread-1", iperf_ip, self.iperf_port, self, bws[counter], self.logger)
       counter += 1
       self.clients += [thread1]
       thread1.start()
+      pinger = runPing(1, "t", iperf_ip, self.logger)
+      pinger.start()
     #endFor
     print "starting socket while accept..."
     while True:

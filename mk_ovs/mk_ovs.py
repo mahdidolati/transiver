@@ -92,7 +92,10 @@ for intf in eth_list:
       isPoxRunning = True
       runPoxInst = runPox()
       runPoxInst.start()
-    cmd = "sudo route add -net 10.1.66.0 netmask 255.255.255.0 dev eth%s" %eth_num
+    cmd1 = "sudo route add -net 10.1.66.0 netmask 255.255.255.0 dev eth%s" %eth_num
+    cmd2 = "sudo route add -net 10.1.66.0 netmask 255.255.255.0 gw 10.1.66.3 dev eth%s" %eth_num
+    cmd3 = "sudo route add -net 10.1.11.0 netmask 255.255.255.0 gw 10.1.66.3 dev eth%s" %eth_num
+    cmd = "%s;%s;%s" %(cmd1,cmd2,cmd3)
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
     p.communicate()
     #endIf
@@ -110,7 +113,11 @@ for intf in eth_list:
     (output, err) = p.communicate()
     logger.info('end of switch %s -- %s' %(output,err))
   if s_mode == "-s":
-    cmd = "sudo ifconfig eth%s %s netmask 255.255.255.0" %(eth_num, s_ip)
+    cmd1 = "sudo ifconfig eth%s %s netmask 255.255.255.0" %(eth_num, s_ip)
+    cmd2 = "sudo route add -net 10.1.66.0 netmask 255.255.255.0 gw 10.1.66.3 dev eth%s" %eth_num
+    cmd3 = "sudo route add -net 10.1.11.0 netmask 255.255.255.0 dev eth%s" %eth_num
+    cmd4 = "sudo route add -net 10.1.11.0 netmask 255.255.255.0 gw 10.1.66.3 dev eth%s" %eth_num
+    cmd = "%s;%s;%s;%s" %(cmd1,cmd2,cmd3,cmd4)
     p =subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
     p.communicate()
 
