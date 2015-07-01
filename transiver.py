@@ -37,19 +37,22 @@ class runPing(threading.Thread):
       cmd = "ping %s -c 20" %self.ip
       print cmd
       p = subprocess.check_output(cmd, shell=True)
-      p = p.split("time=")
-      flag = True
-      ping_avg = 0
-      for tt in p:
-        if flag:
-          flag = False
-          continue
-        ping_res = tt.split(" ms")
-        if len(ping_res) > 0:
-          p_time = float(ping_res[0].split(" ms")[0])
-          ping_avg += p_time
-      print ping_avg/20
-      logger.info("delay,%s,%s" %(time.time()*1000, ping_avg))
+      try:
+        p = p.split("time=")
+        flag = True
+        ping_avg = 0
+        for tt in p:
+          if flag:
+            flag = False
+            continue
+          ping_res = tt.split(" ms")
+          if len(ping_res) > 0:
+            p_time = float(ping_res[0].split(" ms")[0])
+            ping_avg += p_time
+        print ping_avg/20
+        logger.info("delay,%s,%s" %(time.time()*1000, ping_avg))
+      except:
+        pass
 
 class runIperfClient(threading.Thread):
   def __init__(self, threadID, name, ip, port, sock_server, bw, logger):
@@ -71,26 +74,29 @@ class runIperfClient(threading.Thread):
       print cmd
       cmd = "sudo sh /users/mdolati/transiver/my_iperf.sh %s %s %s" %(self.ip,self.bw, self.t)
       p = subprocess.check_output(cmd, shell=True)
-      self.bw += 0.1
+      # self.bw += 0.1
       # (output, err) = p.communicate()
       p = str(p)
-      loss_perc = p.split("%")[0].split("(")
-      loss_perc = loss_perc[len(loss_perc)-1]
-      #print "/n--iperf out--/n",output
-      bw_srv = p.split("Server Report:")
-      bw_srv = bw_srv[len(bw_srv)-1].split(" Mbits/sec")[0].split(" ")
-      bw_srv = float(bw_srv[len(bw_srv)-1])
-      logger.info("loss,%s,%s,%s" %(time.time(),bw_srv,loss_perc))
-      #
-      o_list = p.split(']')
-      o_list = o_list[1].split(' ')
-      for i in range(len(o_list)):
-        if o_list[i] == "port":
-          self.my_port = int(o_list[i+1])
-          break
-          #endIf
-      #endFor
-      print "my_port",self.my_port
+      try:
+        loss_perc = p.split("%")[0].split("(")
+        loss_perc = loss_perc[len(loss_perc)-1]
+        #print "/n--iperf out--/n",output
+        bw_srv = p.split("Server Report:")
+        bw_srv = bw_srv[len(bw_srv)-1].split(" Mbits/sec")[0].split(" ")
+        bw_srv = float(bw_srv[len(bw_srv)-1])
+        logger.info("loss,%s,%s,%s" %(time.time(),bw_srv,loss_perc))
+        #
+        o_list = p.split(']')
+        o_list = o_list[1].split(' ')
+        for i in range(len(o_list)):
+          if o_list[i] == "port":
+            self.my_port = int(o_list[i+1])
+            break
+            #endIf
+        #endFor
+        print "my_port",self.my_port
+      except:
+        pass
   def print_msg(self, msg):
     print "message from controller to application",msg    
   def instruct_app(self, msg):
