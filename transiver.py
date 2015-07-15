@@ -26,12 +26,21 @@ class runIperfServer(threading.Thread):
     # print "iperf out", output
 
 class runPing(threading.Thread):
-  def __init__(self, threadID, name, ip, logger):
+  def __init__(self, threadID, name, ip, my_ip):
     threading.Thread.__init__(self)
     self.threadID = threadID
     self.ip = ip
-    self.logger = logger
     self.quit = False
+    self.my_ip = my_ip
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+    handler = logging.FileHandler("/users/mdolati/transiver/results/d-results%s-%s.log" %(my_ip,ip))
+    handler.setLevel(logging.INFO)
+    # formatter = logging.Formatter('%(message)')
+    # handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.info("hello")
+    self.logger = logger
   def run(self):
     while self.quit == False:
       cmd = "ping %s -c 20" %self.ip
@@ -50,12 +59,12 @@ class runPing(threading.Thread):
             p_time = float(ping_res[0].split(" ms")[0])
             ping_avg += p_time
         print ping_avg/20
-        logger.info("delay,%s,%s" %(time.time()*1000, ping_avg))
+        self.logger.info("delay,%s,%s" %(time.time()*1000, (ping_avg/20.0)))
       except:
         pass
 
 class runIperfClient(threading.Thread):
-  def __init__(self, threadID, name, ip, port, sock_server, bw, logger):
+  def __init__(self, threadID, name, ip, port, sock_server, bw, my_ip):
     threading.Thread.__init__(self)
     self.threadID = threadID
     self.ip = ip
@@ -65,6 +74,15 @@ class runIperfClient(threading.Thread):
     self.sock_server = sock_server
     self.my_port = 0
     self.quit = False
+    self.my_ip = my_ip
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+    handler = logging.FileHandler("/users/mdolati/transiver/results/l-results%s-%s.log" %(my_ip,ip))
+    handler.setLevel(logging.INFO)
+    # formatter = logging.Formatter('%(message)')
+    # handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.info("hello")
     self.logger = logger
   def run(self):
     while self.quit == False:
@@ -72,19 +90,24 @@ class runIperfClient(threading.Thread):
       params = (self.ip,self.port,self.bw,self.t)
       cmd = "sudo iperf -c %s -p %s -u -b %sm -t %s" %params
       print cmd
-      cmd = "sudo sh /users/mdolati/transiver/my_iperf.sh %s %s %s" %(self.ip,self.bw, self.t)
+      # cmd = "sudo sh /users/mdolati/transiver/my_iperf.sh %s %s %s" %(self.ip,self.bw, self.t)
       p = subprocess.check_output(cmd, shell=True)
-      # self.bw += 0.1
+      self.bw += 0.03
       # (output, err) = p.communicate()
       p = str(p)
       try:
+        if p.find("%") == -1:
+          continue
         loss_perc = p.split("%")[0].split("(")
         loss_perc = loss_perc[len(loss_perc)-1]
+        print ("loss", loss_perc)
         #print "/n--iperf out--/n",output
         bw_srv = p.split("Server Report:")
-        bw_srv = bw_srv[len(bw_srv)-1].split(" Mbits/sec")[0].split(" ")
-        bw_srv = float(bw_srv[len(bw_srv)-1])
-        logger.info("loss,%s,%s,%s" %(time.time(),bw_srv,loss_perc))
+        bw_srv = bw_srv[len(bw_srv)-1].split("/sec")[0].split(" ")
+        bw_srv_unit = bw_srv[len(bw_srv)-1]
+        bw_srv_val = bw_srv[len(bw_srv)-2]
+        print ("bw", bw_srv_val, bw_srv_unit)
+        self.logger.info("loss,%s,%s,%s,%s" %(time.time(),bw_srv_val,bw_srv_unit,loss_perc))
         #
         o_list = p.split(']')
         o_list = o_list[1].split(' ')
@@ -104,7 +127,9 @@ class runIperfClient(threading.Thread):
       self.quit = True
     self.print_msg(msg)
     if int(msg[0]) == self.my_port:
-      self.bw -= float(msg[1])
+      self.bw -= (2*float(msg[1]))
+      if self.bw < 0.05:
+        self.bw = 0.05
 
 '''class acceptCtrlFeedback(threading.Thread):
   def __init__(self, s):
@@ -114,13 +139,12 @@ class runIperfClient(threading.Thread):
     return self.s.accept()'''
 
 class sockServer(threading.Thread):
-  def __init__(self, ip, sock_port, iperf_port, logger):
+  def __init__(self, ip, sock_port, iperf_port):
     threading.Thread.__init__(self)
     self.threadID = 2
     self.ip = ip
     self.sock_port = sock_port
     self.iperf_port = iperf_port
-    self.logger = logger
     print "start sock server..."
   def run(self):
     kill_port_listener(self.sock_port)
@@ -136,11 +160,17 @@ class sockServer(threading.Thread):
     # bws = [9.0]
     counter = 0
     for iperf_ip in ips:
-      thread1 = runIperfClient(1, "Thread-1", iperf_ip, self.iperf_port, self, bws[counter], self.logger)
+      well_bw = bws[counter]
+      if well_bw < 0.05:
+        well_bw = 0.05
+      if well_bw == 0.0:
+        counter += 1
+        continue
+      thread1 = runIperfClient(1, "Thread-1", iperf_ip, self.iperf_port, self, well_bw, self.ip)
       counter += 1
       self.clients += [thread1]
       thread1.start()
-      pinger = runPing(1, "t", iperf_ip, self.logger)
+      pinger = runPing(1, "t", iperf_ip, self.ip)
       pinger.start()
     #endFor
     print "starting socket while accept..."
@@ -211,15 +241,7 @@ p.communicate()
 if mode == "server":
   eth_num = get_eth_ip()[0][0]
   eth_ip = get_eth_ip()[0][1]
-  logger = logging.getLogger(__name__)
-  logger.setLevel(logging.INFO)
-  handler = logging.FileHandler("/users/mdolati/transiver/results/results%s.log" %eth_ip)
-  handler.setLevel(logging.INFO)
-  # formatter = logging.Formatter('%(message)')
-  # handler.setFormatter(formatter)
-  logger.addHandler(handler)
-  logger.info("hello")
-  sock_server = sockServer(eth_ip, sock_port, iperf_port, logger) 
+  sock_server = sockServer(eth_ip, sock_port, iperf_port) 
   sock_server.start()
   print "creating and running sock server finished..."
 else:
