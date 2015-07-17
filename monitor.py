@@ -22,6 +22,11 @@ import socket
 
 log = core.getLogger()
 
+switch_num_detected = 0
+switches_detected = {}
+TOPO_LINK_NUM = 12
+link_num_detected = 0
+h_sw = {}
 
 class DeviceStat:
 
@@ -54,19 +59,18 @@ class PortStat:
     return ret
 
 def sendR(ip, port, defPort, rate):
-  log.warning("------------------[]-------------------")
   try:
-    log.warning("\n\tsendR: " + str(port) + ':' + str(ip) + ':' + str(int(rate)) )
     s = socket.socket()
     s.connect((str(ip),defPort))
     try:
       s.sendall(""+str(port)+","+str(rate))
+      log.warning("\n\tsendR: " + str(port) + ':' + str(ip) + ':' + str(int(rate)) )
     except socket.error:
       log.warning("send failed")
     finally:
       s.close()
   except:
-    log.warning("\n\tError connecting to %s" %ip)
+    log.warning("\n\tError connecting to %s:%s" %(ip,port))
   '''
   try:
     h = Http()
@@ -103,17 +107,19 @@ def _timer_func ():
   defVal = 20
   defPort = 8080 
   ddd = core.flowDicto.getFlowDicto()
+  #log.warning("-------------------- %s -------" %len(ddd))
   for f in ddd:
     v = ddd[f]
     rIp = v[0]
     rPort = v[1]
     defVal = v[2]
-    start_new_thread(sendR ,(rIp, rPort, defPort, defVal,))
-    break
+    if defVal != 0.0: 
+      start_new_thread(sendR ,(rIp, rPort, defPort, defVal,))
+    # CHERA INJA BREAK BOOOOOOOD??????? :((((((((
   core.flowDicto.resetFlowDicto()
   if core.cong == True:
     core.cong = False
-    core.congRounds += 1
+    core.congRounds += 0.3
   else:
     core.congRounds = 0
   for connection in core.openflow._connections.values():
@@ -147,7 +153,7 @@ def _handle_flowstats_received (event):
           valKilo = f.byte_count/BW_UNIT
           totalKilo += valKilo
           flowUsageRatio[str(f.match.nw_src)+str(f.match.tp_src)] = (f.match.nw_src, f.match.tp_src, valKilo, ac.port)
-          log.warning("\n\tOn device %s port %s\n\tIP flow with tp: %s and usage: %s" %(device,ac.port,f.match.tp_src,valKilo))
+          #log.warning("\n\tOn device %s port %s\n\tIP flow with tp: %s and usage: %s" %(device,ac.port,f.match.tp_src,valKilo))
           #ignore registration
           ''' 
           for reg in core.regFlows.getFlows():
@@ -205,6 +211,32 @@ def _handle_flowstats_received (event):
   #log.warning("Web traffic from %s: %s bytes (%s packets) over %s flows",
   #  dpidToStr(event.connection.dpid), web_bytes, web_packet, web_flows)
 
+def get_intf_capa(device, port):
+  H_TO_E = E_TO_H = 4.3
+  E_TO_A = A_TO_E = 8.6
+  A_TO_C = C_TO_A = 17.2
+  DEFF = 20
+  if device not in switches_detected:
+    return DEFF
+  print "G: %s" %(switches_detected[device])
+  for l in switches_detected[device]:
+    if l[0] == port:
+      print "H: %s %s %s %s" %(port,type(port),l[0],type(l[0]))
+      oth = h_sw[l[1]]
+      print "I: %s" %oth[0]
+      if h_sw[device][0] == "EDGE" and h_sw[l[1]][0] == "AGG":
+        return E_TO_A
+      if h_sw[device][0] == "AGG" and h_sw[l[1]][0] == "EDGE":
+        return A_TO_E
+      if h_sw[device][0] == "AGG" and h_sw[l[1]][0] == "CORE":
+        return A_TO_C
+      if h_sw[device][0] == "CORE" and h_sw[l[1]][0] == "AGG":
+        return C_TO_A
+  if h_sw[device][0] == "EDGE":
+    return E_TO_H
+  else:
+    return DEFF
+
 # handler to display port statistics received in JSON format
 def _handle_portstats_received (event):
   # unit is byte and max is 10MB
@@ -231,12 +263,14 @@ def _handle_portstats_received (event):
       if perRx != 0 or perTx != 0:
         log.debug( "period rx: %s and tx: %s", perRx, perTx )
       tx_rate = (perTx/BW_UNIT)/MONIT_PERIOD
-      log.warning("\n\ton device %s, port %s. tx: %s. rate: %s" %(device,portNo,perTx,tx_rate))
+      #log.warning("\n\ton device %s, port %s. tx: %s. rate: %s" %(device,portNo,perTx,tx_rate))
+      maxx = get_intf_capa(device, portNo)
+      log.warning("d: %s, p: %s, m: %s" %(device,portNo,maxx))
       if tx_rate> MAX_ALLOWED_BW:
         congestion = True
         core.cong = True
-        over_use = tx_rate - MAX_ALLOWED_BW 
-        log.warning("\n\t!!CONGESTION!!\n\tin device %s rate: %s\n\toveruse: %s" %(device,tx_rate,over_use))
+        over_use = tx_rate - maxx
+        #log.warning("\n\t!!CONGESTION!!\n\tin device %s rate: %s\n\toveruse: %s" %(device,tx_rate,over_use))
         if (device in congestedDict)==False:
           congestedDict[device] = DeviceStat({portNo:over_use})
         else:
@@ -257,6 +291,50 @@ class RegFlows( object ):
   def getFlows(self):
     return self.fls
 
+def find_core():
+  #height from core is 2 for all branches
+  global h_sw
+  for n in switches_detected:
+    print "%s .. %s" %(n,switches_detected[n])
+  for n in switches_detected:
+    if len(switches_detected[n]) == 1:
+      h_sw[n] = ("EDGE", 4.3)
+  for n in switches_detected:
+    for oth in switches_detected[n]:
+      if n not in h_sw and oth[1] in h_sw and h_sw[oth[1]][0] == "EDGE":
+        h_sw[n] = ("AGG", 8.6)
+  for n in switches_detected:
+    for oth in switches_detected[n]:
+      if n not in h_sw and oth[1] in h_sw and h_sw[oth[1]][0] == "AGG":
+        h_sw[n] = ("CORE", 17.2)
+  print ">>>>> %s" % h_sw
+
+def _handle_openflow_discovery_LinkEvent (event): 
+  global link_num_detected
+  global switches_detected
+  s1 = event.link.dpid1 
+  s2 = event.link.dpid2
+  s1 = dpidToStr(s1)
+  s2 = dpidToStr(s2)
+  #port type is int
+  p1 = event.link.port1
+  p2 = event.link.port2
+  if s1 not in switches_detected:
+    switches_detected[s1] = [(p1,s2)]
+  else:
+    if (p1,s2) not in switches_detected[s1]:
+      switches_detected[s1] += [(p1,s2)]
+  if s2 not in switches_detected:
+    switches_detected[s2] = [(p2,s1)]
+  else:
+    if (p2,s1) not in switches_detected[s2]:
+      switches_detected[s2] += [(p2,s1)]
+  #
+  link_num_detected += 1
+  if link_num_detected == TOPO_LINK_NUM:
+    print find_core()
+  #print "%s %s %s %s" %(s1,p1,s2,p2)
+
 def launch(topo = None, routing = None, mode = None):
   log.warning("starting monitoring module")
 
@@ -275,6 +353,6 @@ def launch(topo = None, routing = None, mode = None):
   # attach handsers to listners
   core.openflow.addListenerByName("FlowStatsReceived", _handle_flowstats_received)
   core.openflow.addListenerByName("PortStatsReceived", _handle_portstats_received) 
-
+  core.openflow_discovery.addListenerByName("LinkEvent", _handle_openflow_discovery_LinkEvent)
   # timer set
   Timer(10, _timer_func, recurring=True)
