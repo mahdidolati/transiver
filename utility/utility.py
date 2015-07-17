@@ -20,31 +20,23 @@ def get_eth_ip():
 
 def get_ip_bw(my_ip, file_addr="/users/mdolati/transiver/tr_mx"):
   yadi_ips = ['6','7','9','10','13','14','15','17']
-  counter = 0
-  for a in yadi_ips:
-    if str(my_ip) == a:
-      break
-    counter += 1
-  fr = open(file_addr,"r")
-  ip_base = 3
-  my_ip = counter
-  if my_ip < 0:
-    return
-  l = []
-  for i in range(my_ip+1):
-    line = fr.readline()
-  counter = 0
-  for v in line.split(" "):
-    try:
-      if counter != my_ip:
-        l.append(float(v))
-      counter += 1
-    except ValueError:
-      print "no float"
-  return l
+  for i,v in enumerate(yadi_ips):
+    if v==str(my_ip):
+      fr = open(file_addr,"r")
+      line = ""
+      for j in range(i+1):
+        line = fr.readline()
+      l = []
+      for ii,vv in enumerate(line.split(" ")):
+        try:
+          if ii!=i:
+            l.append(float(vv))
+        except ValueError:
+          print "no float"
+      return l
 
 def get_other_ips(my_ip, all=8, base_ip=3, base_net="66"):
-  yadi_ips = ['6','7','9','10','13','14','15','17']
+  yadi_ips = ['6','7','9','10','13','14','16','17']
   ret_l = []
   for a in yadi_ips:
     if a != str(my_ip):
