@@ -64,7 +64,7 @@ def sendR(ip, port, defPort, rate):
     s.connect((str(ip),defPort))
     try:
       s.sendall(""+str(port)+","+str(rate))
-      log.warning("\n\tsendR: " + str(port) + ':' + str(ip) + ':' + str(int(rate)) )
+      log.warning("\n\tsendR: " + str(port) + ':' + str(ip) + ':' + str(rate))
     except socket.error:
       log.warning("send failed")
     finally:
@@ -121,7 +121,7 @@ def _timer_func ():
     core.cong = False
     core.congRounds += 0.3
   else:
-    core.congRounds = 0
+    core.congRounds = 1.0
   for connection in core.openflow._connections.values():
     # connection.send(of.ofp_stats_request(body=of.ofp_flow_stats_request()))
     connection.send(of.ofp_stats_request(body=of.ofp_port_stats_request()))
@@ -136,6 +136,8 @@ def _handle_flowstats_received (event):
   stats = flow_stats_to_list(event.stats)
   conn = event.connection
 
+  #print "---> %s" %(stats['match']['in_port'])
+
   if (device in congestedDict)==False:
     log.debug( "Congestion in device %s already has been taken care of!", device ) 
     return
@@ -145,14 +147,20 @@ def _handle_flowstats_received (event):
 
   for f in event.stats:
     for ac in f.actions:
-      if ac.port in congestedDict[device].ports:
+      congedPorts = congestedDict[device].ports
+      if ac.port in congedPorts or f.match.in_port in congedPorts:
         # 0x0800 shows IP packet type
         if f.match.dl_type == 0x0800:
+          #print "--> %s" %f.match.in_port
           # log.debug( "Flow %s %s is a potential responsible of the congestion!", f.match.nw_src, f.match.tp_src )
           # search over registered flows that want their rate to be regulated
           valKilo = f.byte_count/BW_UNIT
           totalKilo += valKilo
-          flowUsageRatio[str(f.match.nw_src)+str(f.match.tp_src)] = (f.match.nw_src, f.match.tp_src, valKilo, ac.port)
+          log.warning("tp_src %s %s" %(f.match.tp_src,valKilo))
+          flowCongedPort = f.match.in_port
+          if ac.port in congedPorts:
+            flowCongedPort = ac.port
+          flowUsageRatio[str(f.match.nw_src)+str(f.match.tp_src)] = (f.match.nw_src, f.match.tp_src, valKilo, flowCongedPort)
           #log.warning("\n\tOn device %s port %s\n\tIP flow with tp: %s and usage: %s" %(device,ac.port,f.match.tp_src,valKilo))
           #ignore registration
           ''' 
@@ -185,7 +193,7 @@ def _handle_flowstats_received (event):
         break
     # add flow for later treatment
     if overUse != 0:
-      #log.warning("\n\tsending request to %s for: %s" %(n,overUse*ratio))
+      log.warning("\n\tsending request to %s for: %s" %(n,overUse*ratio))
       val_to_reduce = overUse*ratio*core.congRounds
       core.flowDicto.addFlow( n, (flowUsageRatio[n][0], flowUsageRatio[n][1], val_to_reduce) )
 
@@ -218,12 +226,12 @@ def get_intf_capa(device, port):
   DEFF = 20
   if device not in switches_detected:
     return DEFF
-  print "G: %s" %(switches_detected[device])
+  #print "G: %s" %(switches_detected[device])
   for l in switches_detected[device]:
     if l[0] == port:
-      print "H: %s %s %s %s" %(port,type(port),l[0],type(l[0]))
+      #print "H: %s %s %s %s" %(port,type(port),l[0],type(l[0]))
       oth = h_sw[l[1]]
-      print "I: %s" %oth[0]
+      #print "I: %s" %oth[0]
       if h_sw[device][0] == "EDGE" and h_sw[l[1]][0] == "AGG":
         return E_TO_A
       if h_sw[device][0] == "AGG" and h_sw[l[1]][0] == "EDGE":
@@ -241,10 +249,10 @@ def get_intf_capa(device, port):
 def _handle_portstats_received (event):
   # unit is byte and max is 10MB
   BW_UNIT = 1000000.0
-  MAX_ALLOWED_BW = 4.3
   MONIT_PERIOD = 10.0
 
   stats = flow_stats_to_list(event.stats)
+  #print "-------------- %s" %stats
   device = dpidToStr(event.connection.dpid)
   conn = event.connection
   
@@ -263,13 +271,18 @@ def _handle_portstats_received (event):
       if perRx != 0 or perTx != 0:
         log.debug( "period rx: %s and tx: %s", perRx, perTx )
       tx_rate = (perTx/BW_UNIT)/MONIT_PERIOD
+      rx_rate = (perRx/BW_UNIT)/MONIT_PERIOD
+      all_rate = tx_rate + rx_rate
       #log.warning("\n\ton device %s, port %s. tx: %s. rate: %s" %(device,portNo,perTx,tx_rate))
       maxx = get_intf_capa(device, portNo)
-      log.warning("d: %s, p: %s, m: %s" %(device,portNo,maxx))
-      if tx_rate> MAX_ALLOWED_BW:
+      #log.warning("d: %s, p: %s, m: %s" %(device,portNo,maxx))
+      if all_rate > 4.0:
+        log.debug("%s -- %s" %(all_rate, maxx))
+      if all_rate> maxx:
+        #log.warning("overuse %s on %s" %(all_rate, maxx))
         congestion = True
         core.cong = True
-        over_use = tx_rate - maxx
+        over_use = all_rate - maxx
         #log.warning("\n\t!!CONGESTION!!\n\tin device %s rate: %s\n\toveruse: %s" %(device,tx_rate,over_use))
         if (device in congestedDict)==False:
           congestedDict[device] = DeviceStat({portNo:over_use})
@@ -294,8 +307,10 @@ class RegFlows( object ):
 def find_core():
   #height from core is 2 for all branches
   global h_sw
+  '''
   for n in switches_detected:
     print "%s .. %s" %(n,switches_detected[n])
+  '''
   for n in switches_detected:
     if len(switches_detected[n]) == 1:
       h_sw[n] = ("EDGE", 4.3)
@@ -307,7 +322,7 @@ def find_core():
     for oth in switches_detected[n]:
       if n not in h_sw and oth[1] in h_sw and h_sw[oth[1]][0] == "AGG":
         h_sw[n] = ("CORE", 17.2)
-  print ">>>>> %s" % h_sw
+  #print ">>>>> %s" % h_sw
 
 def _handle_openflow_discovery_LinkEvent (event): 
   global link_num_detected
@@ -342,7 +357,7 @@ def launch(topo = None, routing = None, mode = None):
   core.register( 'regFlows', regFlows )
   flowDicto = FlowDicto({})
   core.register( 'flowDicto', flowDicto )
-  congRounds = 0
+  congRounds = 1.0
   core.register( 'congRounds', congRounds )
   cong = False
   core.register( 'cong', cong )
